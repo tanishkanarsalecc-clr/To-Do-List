@@ -1,18 +1,17 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const StopwatchApp());
+  runApp(const TodoApp());
 }
 
-class StopwatchApp extends StatefulWidget {
-  const StopwatchApp({super.key});
+class TodoApp extends StatefulWidget {
+  const TodoApp({super.key});
 
   @override
-  State<StopwatchApp> createState() => _StopwatchAppState();
+  State<TodoApp> createState() => _TodoAppState();
 }
 
-class _StopwatchAppState extends State<StopwatchApp> {
+class _TodoAppState extends State<TodoApp> {
   bool isDark = false;
 
   @override
@@ -20,151 +19,142 @@ class _StopwatchAppState extends State<StopwatchApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.blue,
+      ),
       darkTheme: ThemeData.dark(useMaterial3: true),
-      home: StopwatchScreen(
+      home: TodoPage(
         isDark: isDark,
-        onThemeChanged: () => setState(() => isDark = !isDark),
+        toggleTheme: () {
+          setState(() {
+            isDark = !isDark;
+          });
+        },
       ),
     );
   }
 }
 
-class StopwatchScreen extends StatefulWidget {
+class TodoPage extends StatefulWidget {
   final bool isDark;
-  final VoidCallback onThemeChanged;
+  final VoidCallback toggleTheme;
 
-  const StopwatchScreen({
+  const TodoPage({
     super.key,
     required this.isDark,
-    required this.onThemeChanged,
+    required this.toggleTheme,
   });
 
   @override
-  State<StopwatchScreen> createState() => _StopwatchScreenState();
+  State<TodoPage> createState() => _TodoPageState();
 }
 
-class _StopwatchScreenState extends State<StopwatchScreen> {
-  Timer? timer;
-  int milliseconds = 0;
-  bool isRunning = false;
+class _TodoPageState extends State<TodoPage> {
+  final TextEditingController taskController =
+  TextEditingController();
 
-  final List<int> laps = [];
-  final List<String> activityLog = [];
-  final List<String> achievements = [];
+  final TextEditingController searchController =
+  TextEditingController();
 
-  int pauseCount = 0;
-  static const int targetTime = 60000;
+  List<Map<String, dynamic>> tasks = [];
 
-  void startStopwatch() {
-    timer = Timer.periodic(const Duration(milliseconds: 10), (_) {
-      setState(() {
-        milliseconds += 10;
-        checkAchievements();
+  void addTask() {
+    if (taskController.text.trim().isEmpty) return;
+
+    setState(() {
+      tasks.add({
+        "title": taskController.text.trim(),
+        "done": false,
+        "favorite": false,
+        "time": TimeOfDay.now().format(context),
       });
     });
 
-    activityLog.insert(0, "▶ Started Stopwatch");
-
-    setState(() => isRunning = true);
+    taskController.clear();
   }
 
-  void pauseStopwatch() {
-    timer?.cancel();
-    pauseCount++;
-    activityLog.insert(0, "⏸ Paused Stopwatch");
-
-    setState(() => isRunning = false);
-  }
-
-  void resetStopwatch() {
-    timer?.cancel();
-
+  void deleteTask(int index) {
     setState(() {
-      milliseconds = 0;
-      laps.clear();
-      isRunning = false;
-      pauseCount = 0;
-      achievements.clear();
-      activityLog.insert(0, "🔄 Reset Stopwatch");
+      tasks.removeAt(index);
     });
   }
 
-  void addLap() {
-    if (milliseconds <= 0) return;
-
+  void toggleTask(int index) {
     setState(() {
-      laps.insert(0, milliseconds);
+      tasks[index]["done"] =
+      !tasks[index]["done"];
     });
 
-    activityLog.insert(0, "🏁 Lap Recorded");
-    checkAchievements();
-  }
-
-  void checkAchievements() {
-    if (milliseconds >= 30000 &&
-        !achievements.contains("🏅 Reached 30 Seconds")) {
-      achievements.add("🏅 Reached 30 Seconds");
-    }
-
-    if (milliseconds >= 60000 &&
-        !achievements.contains("🏆 Reached 1 Minute")) {
-      achievements.add("🏆 Reached 1 Minute");
-    }
-
-    if (laps.length >= 5 && !achievements.contains("🚩 Recorded 5 Laps")) {
-      achievements.add("🚩 Recorded 5 Laps");
+    if (tasks[index]["done"]) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("🎉 Task Completed!"),
+        ),
+      );
     }
   }
 
-  String getMotivation() {
-    if (milliseconds < 10000) return "🚀 Great Start!";
-    if (milliseconds < 30000) return "🔥 Keep Going!";
-    if (milliseconds < 60000) return "💪 Amazing Focus!";
-    if (milliseconds < 120000) return "⭐ Fantastic Work!";
-    return "🏆 Champion Performance!";
+  void toggleFavorite(int index) {
+    setState(() {
+      tasks[index]["favorite"] =
+      !tasks[index]["favorite"];
+    });
   }
 
-  String formatTime(int ms) {
-    int hundredths = (ms ~/ 10) % 100;
-    int seconds = (ms ~/ 1000) % 60;
-    int minutes = (ms ~/ 60000) % 60;
-    int hours = ms ~/ 3600000;
-
-    return "${hours.toString().padLeft(2, '0')}:"
-        "${minutes.toString().padLeft(2, '0')}:"
-        "${seconds.toString().padLeft(2, '0')}:"
-        "${hundredths.toString().padLeft(2, '0')}";
+  void clearCompleted() {
+    setState(() {
+      tasks.removeWhere(
+            (task) => task["done"] == true,
+      );
+    });
   }
 
-  String getAverageLap() {
-    if (laps.isEmpty) return "00:00:00:00";
-    int total = laps.reduce((a, b) => a + b);
-    return formatTime(total ~/ laps.length);
-  }
+  String get motivation {
+    int completed =
+        tasks.where((t) => t["done"]).length;
 
-  List<int> get rankedLaps {
-    final sorted = List<int>.from(laps);
-    sorted.sort();
-    return sorted;
-  }
-
-  @override
-  void dispose() {
-    timer?.cancel();
-    super.dispose();
+    if (completed == 0) {
+      return "🚀 Start your day!";
+    } else if (completed < 3) {
+      return "🔥 Keep going!";
+    } else if (completed < 5) {
+      return "💪 Great progress!";
+    } else {
+      return "🏆 Productivity Master!";
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    int completed =
+        tasks.where((t) => t["done"]).length;
+
+    int pending = tasks.length - completed;
+
+    double progress =
+    tasks.isEmpty ? 0 : completed / tasks.length;
+
+    List<Map<String, dynamic>> filteredTasks =
+    tasks.where((task) {
+      return task["title"]
+          .toLowerCase()
+          .contains(
+        searchController.text.toLowerCase(),
+      );
+    }).toList();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Advanced Stopwatch"),
+        title: const Text("Smart To-Do"),
         actions: [
           IconButton(
+            onPressed: widget.toggleTheme,
             icon: Icon(
-                widget.isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: widget.onThemeChanged,
+              widget.isDark
+                  ? Icons.light_mode
+                  : Icons.dark_mode,
+            ),
           ),
         ],
       ),
@@ -172,114 +162,146 @@ class _StopwatchScreenState extends State<StopwatchScreen> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            const SizedBox(height: 10),
-            Text(
-              formatTime(milliseconds),
-              style: const TextStyle(
-                fontSize: 42,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              getMotivation(),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: (milliseconds / targetTime).clamp(0.0, 1.0),
-            ),
-            const SizedBox(height: 15),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    Text("⏸ Pauses: $pauseCount"),
-                    Text("🏁 Total Laps: ${laps.length}"),
-                    Text("📈 Average Lap: ${getAverageLap()}"),
+                    Text(
+                      motivation,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    LinearProgressIndicator(
+                      value: progress,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Total: ${tasks.length} | "
+                          "Completed: $completed | "
+                          "Pending: $pending",
+                    ),
                   ],
                 ),
               ),
             ),
+
+            TextField(
+              controller: searchController,
+              decoration: const InputDecoration(
+                hintText: "Search tasks...",
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (_) {
+                setState(() {});
+              },
+            ),
+
             const SizedBox(height: 10),
+
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton.icon(
-                  onPressed:
-                  isRunning ? pauseStopwatch : startStopwatch,
-                  icon: Icon(
-                      isRunning ? Icons.pause : Icons.play_arrow),
-                  label: Text(isRunning ? "Pause" : "Start"),
+                Expanded(
+                  child: TextField(
+                    controller: taskController,
+                    decoration:
+                    const InputDecoration(
+                      hintText: "Enter task",
+                      border:
+                      OutlineInputBorder(),
+                    ),
+                  ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: addLap,
-                  icon: const Icon(Icons.flag),
-                  label: const Text("Lap"),
-                ),
-                ElevatedButton.icon(
-                  onPressed: resetStopwatch,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text("Reset"),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: addTask,
+                  child: const Text("Add"),
                 ),
               ],
             ),
+
+            const SizedBox(height: 10),
+
+            ElevatedButton.icon(
+              onPressed: clearCompleted,
+              icon: const Icon(Icons.cleaning_services),
+              label:
+              const Text("Clear Completed"),
+            ),
+
+            const SizedBox(height: 10),
+
             Expanded(
-              child: ListView(
-                children: [
-                  ExpansionTile(
-                    title: const Text("🏆 Achievements"),
-                    children: achievements.isEmpty
-                        ? [const ListTile(title: Text("No achievements yet"))]
-                        : achievements
-                        .map((e) => ListTile(title: Text(e)))
-                        .toList(),
-                  ),
-                  ExpansionTile(
-                    title: const Text("📜 Activity Log"),
-                    children: activityLog.isEmpty
-                        ? [const ListTile(title: Text("No activity yet"))]
-                        : activityLog
-                        .map((e) => ListTile(title: Text(e)))
-                        .toList(),
-                  ),
-                  const ListTile(
-                    title: Text(
-                      "🏁 Lap History",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  ...List.generate(laps.length, (index) {
-                    final lap = laps[index];
+              child: filteredTasks.isEmpty
+                  ? const Center(
+                child:
+                Text("No tasks found"),
+              )
+                  : ListView.builder(
+                itemCount:
+                filteredTasks.length,
+                itemBuilder:
+                    (context, index) {
+                  final task =
+                  filteredTasks[index];
 
-                    String medal = "";
+                  int realIndex =
+                  tasks.indexOf(task);
 
-                    if (rankedLaps.isNotEmpty && lap == rankedLaps[0]) {
-                      medal = "🥇";
-                    } else if (rankedLaps.length > 1 &&
-                        lap == rankedLaps[1]) {
-                      medal = "🥈";
-                    } else if (rankedLaps.length > 2 &&
-                        lap == rankedLaps[2]) {
-                      medal = "🥉";
-                    }
-
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          child: Text("${laps.length - index}"),
-                        ),
-                        title: Text(formatTime(lap)),
-                        subtitle:
-                        Text("Lap ${laps.length - index} $medal"),
+                  return Card(
+                    child: ListTile(
+                      leading: Checkbox(
+                        value:
+                        task["done"],
+                        onChanged: (_) =>
+                            toggleTask(
+                                realIndex),
                       ),
-                    );
-                  }),
-                ],
+                      title: Text(
+                        task["title"],
+                        style: TextStyle(
+                          decoration:
+                          task["done"]
+                              ? TextDecoration
+                              .lineThrough
+                              : null,
+                        ),
+                      ),
+                      subtitle: Text(
+                        "Added: ${task["time"]}",
+                      ),
+                      trailing: Row(
+                        mainAxisSize:
+                        MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              task["favorite"]
+                                  ? Icons.star
+                                  : Icons
+                                  .star_border,
+                              color: Colors
+                                  .amber,
+                            ),
+                            onPressed: () =>
+                                toggleFavorite(
+                                    realIndex),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete,
+                            ),
+                            onPressed: () =>
+                                deleteTask(
+                                    realIndex),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
